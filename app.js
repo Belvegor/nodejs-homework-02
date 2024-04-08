@@ -1,14 +1,19 @@
 const express = require('express');
 const logger = require('morgan');
-const cors = require('cors');
-const { listContacts, getContactById, addContact, removeContact, updateContact } = require('./models/contacts');
+
+const { 
+  addContact, 
+  getContactById, 
+  listContacts, 
+  removeContact, 
+  updateContact 
+} = require('./models/contacts');
+
 const app = express();
 
 const formatsLogger = app.get('env') === 'development' ? 'dev' : 'short';
 
 app.use(logger(formatsLogger));
-app.use(cors());
-app.use(express.json());
 
 app.get('/api/contacts', async (req, res) => {
   const contacts = await listContacts();

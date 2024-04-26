@@ -9,6 +9,8 @@ connectDB();
 
 app.use(express.json());
 
+app.use(express.static('public'));
+
 app.use('/api/contacts', contactsRoutes);
 app.use('/api/users', usersRoutes); 
 

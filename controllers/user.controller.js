@@ -5,6 +5,58 @@ const fs = require('fs');
 const path = require('path');
 const Jimp = require('jimp');
 const gravatar = require('gravatar');
+const mg = require('../mailgunConfig');
+const { v4: uuidv4 } = require('uuid');
+
+const verifyUser = async (req, res, next) => {
+  try {
+    const verificationToken = req.params.verificationToken;
+        const user = await User.findOne({ verificationToken });
+    if (!user) {
+        return res.status(404).json({ message: 'User not found' });    }
+    user.verify = true;
+    user.verificationToken = null;
+    await user.save();
+    res.status(200).json({ message: 'Verification successful' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
+const sendVerificationEmail = async (email, verificationToken) => {
+  const mailOptions = {
+    from: process.env.EMAIL_SENDER,
+    to: email,
+    subject: 'Email Verification',
+    text: `Click the following link to verify your email: ${process.env.BASE_URL}/api/users/verify/${verificationToken}`,
+  };
+
+  await mg.messages().send(mailOptions);
+};
+
+const resendVerificationEmail = async (req, res, next) => {
+  try {
+     if (!req.body.email) {
+      return res.status(400).json({ message: 'Missing required field email' });
+    }
+     const user = await User.findOne({ email: req.body.email });
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+     if (user.verify) {
+      return res.status(400).json({ message: 'Verification has already been passed' });
+    }
+     const verificationToken = uuidv4();
+     user.verificationToken = verificationToken;
+    await user.save();
+    await sendVerificationEmail(user.email, verificationToken);
+     res.status(200).json({ message: 'Verification email sent' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
 
 const signup = async (req, res, next) => {
   try {
@@ -17,11 +69,15 @@ const signup = async (req, res, next) => {
     }
     const avatarURL = gravatar.url(email, { s: '250', d: 'identicon', r: 'pg' }); 
 
-    const newUser = new User({ email, password, avatarURL }); 
+    const verificationToken = uuidv4();
+
+    const newUser = new User({ email, password, avatarURL, verificationToken }); 
     const salt = await bcrypt.genSalt(10);
     newUser.password = await bcrypt.hash(password, salt);
 
     await newUser.save();
+
+    await sendVerificationEmail(email, verificationToken);
 
     res.status(201).json({ message: 'User registered successfully' });
   } catch (error) {
@@ -101,4 +157,4 @@ const logout = async (req, res, next) => {
     }
   };
   
-  module.exports = { signup, login, logout, getCurrentUser, uploadAvatar };
+  module.exports = { signup, login, logout, getCurrentUser, uploadAvatar, verifyUser, resendVerificationEmail };
